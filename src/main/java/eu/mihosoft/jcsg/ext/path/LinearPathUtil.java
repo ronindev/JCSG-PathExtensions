@@ -23,7 +23,9 @@
 package eu.mihosoft.jcsg.ext.path;
 
 import eu.mihosoft.vvecmath.Vector3d;
+
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -78,6 +80,51 @@ public final class LinearPathUtil {
             result.add(path.get(i).plus(vertexNormals.get(i).
                     times(amount)));
         }
+
+        return result;
+    }
+
+    /**
+     * Make not closed path thicker, adding reverse side of points.
+     *
+     * @param path not closed path
+     * @param width desired width of path
+     * @return 2d path width desired width
+     */
+    public static List<Vector3d> thickPath(List<Vector3d> path, double width) {
+        List<Vector3d> result = new ArrayList<>(path.size());
+
+        // 1. compute edge normals
+        List<Vector3d> edgeNormals = new ArrayList<>(path.size()-1);
+
+        for (int i = 0; i < path.size()-1; i++) {
+            Vector3d segment = path.get(i+1).minus(path.get(i));
+            edgeNormals.add(Vector3d.xy(-segment.y(), segment.x()).normalized());
+        }
+
+        // 2. compute vertex normals (average of adjacent edge normals)
+        List<Vector3d> vertexNormals = new ArrayList<>(path.size());
+
+        //First vertex normal is equal to edge normal
+        vertexNormals.add(edgeNormals.get(0).normalized());
+
+        for (int i = 1; i < edgeNormals.size(); i++) {
+            Vector3d n = edgeNormals.get(i).lerp(edgeNormals.get(i - 1), 0.5).
+                    normalized();
+            vertexNormals.add(n);
+        }
+        //Last vertex normal is equal to edge normal
+        vertexNormals.add(edgeNormals.get(edgeNormals.size()-1).normalized());
+
+        //reverse side of path
+        List<Vector3d> reverseSide = new ArrayList<>(path.size());
+        // 3. extend path along vertex normals
+        for (int i = 0; i < path.size()-1; i++) {
+            result.add(path.get(i).plus(vertexNormals.get(i).times(width/2)));
+            reverseSide.add(path.get(i).minus(vertexNormals.get(i).times(width/2)));
+        }
+        Collections.reverse(reverseSide); //has to be reversed
+        result.addAll(reverseSide);
 
         return result;
     }
