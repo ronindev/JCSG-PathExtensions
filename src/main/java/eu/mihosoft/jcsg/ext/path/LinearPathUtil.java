@@ -23,6 +23,7 @@
 package eu.mihosoft.jcsg.ext.path;
 
 import eu.mihosoft.vvecmath.Vector3d;
+import org.poly2tri.triangulation.util.Tuple2;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -77,11 +78,75 @@ public final class LinearPathUtil {
 
         // 3. extend path along vertex normals
         for (int i = 0; i < path.size(); i++) {
-            result.add(path.get(i).plus(vertexNormals.get(i).
-                    times(amount)));
+            Vector3d newPoint = path.get(i).plus(vertexNormals.get(i).times(amount));
+            if (result.size()>3) {
+                for (int j = 0; j < result.size()-2; j++) {
+                    Tuple2<Boolean, Vector3d> test = linesIntersect(result.get(j), result.get(j + 1), result.get(result.size() - 1), newPoint);
+                    if (test.a) {
+                        //Intersection is found. Removing collision points
+                        for (int k = j+1; k < result.size(); k++) {
+                            result.remove(k);
+                            k--;
+                        }
+                        if (test.b != null) {
+                            //If found intersection point, adding it as midpoint
+                            result.add(test.b);
+                        }
+                    }
+                }
+            }
+            result.add(newPoint);
+        }
+        return result;
+    }
+
+    // Determines if the lines AB and CD intersect.
+    private static Tuple2<Boolean, Vector3d> linesIntersect(Vector3d A, Vector3d B, Vector3d C, Vector3d D)
+    {
+        Vector3d CmP = Vector3d.xy(C.getX() - A.getX(), C.getY() - A.getY());
+        Vector3d r = Vector3d.xy(B.getX() - A.getX(), B.getY() - A.getY());
+        Vector3d s = Vector3d.xy(D.getX() - C.getX(), D.getY() - C.getY());
+
+        double CmPxr = CmP.getX() * r.getY() - CmP.getY() * r.getX();
+        double CmPxs = CmP.getX() * s.getY() - CmP.getY() * s.getX();
+        double rxs = r.getX() * s.getY() - r.getY() * s.getX();
+
+        if (CmPxr == 0.0)
+        {
+            // Lines are collinear, and so intersect if they have any overlap
+            return new Tuple2<>(((C.getX() - A.getX() < 0.0) != (C.getX() - B.getX() < 0.0))
+                    || ((C.getY() - A.getY() < 0.0) != (C.getY() - B.getY() < 0.0)), null);
         }
 
-        return result;
+        if (rxs == 0.0)
+            return new Tuple2<>(Boolean.FALSE, null); // Lines are parallel.
+
+        double rxsr = 1.0 / rxs;
+        double t = CmPxs * rxsr;
+        double u = CmPxr * rxsr;
+
+        if ((t >= 0.0) && (t <= 1.0) && (u >= 0.0) && (u <= 1.0)) {
+            return new Tuple2<>(Boolean.TRUE, getIntersection(A, B, C, D));
+        } else {
+            return new Tuple2<>(Boolean.FALSE, null);
+        }
+    }
+
+    //Get intersection of 2 lines AB and CD, not segments. Need to detect segments interception first
+    private static Vector3d getIntersection(Vector3d A, Vector3d B, Vector3d C, Vector3d D)
+    {
+        double xo = A.getX(), yo = A.getY();
+        double p = B.getX() - A.getX(), q = B.getY() - A.getY();
+
+        double x1 = C.getX(), y1 = C.getY();
+        double p1 = D.getX() - C.getX(), q1 = D.getY() - C.getY();
+
+        double x = (xo * q * p1 - x1 * q1 * p - yo * p * p1 + y1 * p * p1) /
+                (q * p1 - q1 * p);
+        double y = (yo * p * q1 - y1 * p1 * q - xo * q * q1 + x1 * q * q1) /
+                (p * q1 - p1 * q);
+
+        return Vector3d.xy(x, y);
     }
 
     /**
